@@ -1,0 +1,194 @@
+{
+  "cutoff": "2021-06-01",
+  "end_exclusive": "2021-07-01",
+  "k": 10,
+  "eligible_assets": 767,
+  "tfidf_vocabulary": 1977,
+  "setup_seconds": 2.1,
+  "demo_100": {
+    "users": 100,
+    "nonempty_truth_users": 11,
+    "methods": {
+      "latest_buy (repeat newest-first + popularity fill)": {
+        "ndcg_at_10": 0.027723,
+        "ndcg_at_10_nonempty": 0.252024
+      },
+      "repeat + CBF-token explore fill": {
+        "ndcg_at_10": 0.024389,
+        "ndcg_at_10_nonempty": 0.221721
+      },
+      "repeat + TF-IDF-text explore fill": {
+        "ndcg_at_10": 0.024389,
+        "ndcg_at_10_nonempty": 0.221721
+      },
+      "repeat + recent-popularity (90 days) explore fill": {
+        "ndcg_at_10": 0.027544,
+        "ndcg_at_10_nonempty": 0.2504
+      },
+      "repeat ordered by buy count, then recency + popularity fill": {
+        "ndcg_at_10": 0.038484,
+        "ndcg_at_10_nonempty": 0.349855
+      },
+      "explore only: popularity, never-bought": {
+        "ndcg_at_10": 0.01,
+        "ndcg_at_10_nonempty": 0.090909
+      },
+      "explore only: TF-IDF text, never-bought": {
+        "ndcg_at_10": 0.002891,
+        "ndcg_at_10_nonempty": 0.026279
+      },
+      "oracle split: repeat newest-first + popularity explore": {
+        "ndcg_at_10": 0.034389,
+        "ndcg_at_10_nonempty": 0.31263
+      },
+      "oracle split: repeat newest-first + recent popularity 90d explore": {
+        "ndcg_at_10": 0.037187,
+        "ndcg_at_10_nonempty": 0.33806
+      },
+      "oracle split: repeat newest-first + TF-IDF text explore": {
+        "ndcg_at_10": 0.02728,
+        "ndcg_at_10_nonempty": 0.248
+      },
+      "oracle order inside repeat channel + popularity fill": {
+        "ndcg_at_10": 0.059465,
+        "ndcg_at_10_nonempty": 0.540589
+      }
+    },
+    "explore_recall_of_never_bought_purchases": {
+      "popularity@10": {
+        "found": 1,
+        "total": 6,
+        "recall": 0.1667
+      },
+      "popularity@50": {
+        "found": 5,
+        "total": 6,
+        "recall": 0.8333
+      },
+      "recent popularity 90d@10": {
+        "found": 3,
+        "total": 6,
+        "recall": 0.5
+      },
+      "recent popularity 90d@50": {
+        "found": 6,
+        "total": 6,
+        "recall": 1.0
+      },
+      "CBF tokens@10": {
+        "found": 0,
+        "total": 6,
+        "recall": 0.0
+      },
+      "CBF tokens@50": {
+        "found": 1,
+        "total": 6,
+        "recall": 0.1667
+      },
+      "TF-IDF text@10": {
+        "found": 1,
+        "total": 6,
+        "recall": 0.1667
+      },
+      "TF-IDF text@50": {
+        "found": 3,
+        "total": 6,
+        "recall": 0.5
+      }
+    },
+    "seconds": 0.1
+  },
+  "warm_all": {
+    "users": 10404,
+    "nonempty_truth_users": 1178,
+    "methods": {
+      "latest_buy (repeat newest-first + popularity fill)": {
+        "ndcg_at_10": 0.052633,
+        "ndcg_at_10_nonempty": 0.464849
+      },
+      "repeat + CBF-token explore fill": {
+        "ndcg_at_10": 0.05185,
+        "ndcg_at_10_nonempty": 0.457931
+      },
+      "repeat + TF-IDF-text explore fill": {
+        "ndcg_at_10": 0.052062,
+        "ndcg_at_10_nonempty": 0.459806
+      },
+      "repeat + recent-popularity (90 days) explore fill": {
+        "ndcg_at_10": 0.052579,
+        "ndcg_at_10_nonempty": 0.464374
+      },
+      "repeat ordered by buy count, then recency + popularity fill": {
+        "ndcg_at_10": 0.049401,
+        "ndcg_at_10_nonempty": 0.436308
+      },
+      "explore only: popularity, never-bought": {
+        "ndcg_at_10": 0.007381,
+        "ndcg_at_10_nonempty": 0.065191
+      },
+      "explore only: TF-IDF text, never-bought": {
+        "ndcg_at_10": 0.006153,
+        "ndcg_at_10_nonempty": 0.05434
+      },
+      "oracle split: repeat newest-first + popularity explore": {
+        "ndcg_at_10": 0.05642,
+        "ndcg_at_10_nonempty": 0.498301
+      },
+      "oracle split: repeat newest-first + recent popularity 90d explore": {
+        "ndcg_at_10": 0.055962,
+        "ndcg_at_10_nonempty": 0.494248
+      },
+      "oracle split: repeat newest-first + TF-IDF text explore": {
+        "ndcg_at_10": 0.055161,
+        "ndcg_at_10_nonempty": 0.487174
+      },
+      "oracle order inside repeat channel + popularity fill": {
+        "ndcg_at_10": 0.074068,
+        "ndcg_at_10_nonempty": 0.654164
+      }
+    },
+    "explore_recall_of_never_bought_purchases": {
+      "popularity@10": {
+        "found": 215,
+        "total": 1008,
+        "recall": 0.2133
+      },
+      "popularity@50": {
+        "found": 669,
+        "total": 1008,
+        "recall": 0.6637
+      },
+      "recent popularity 90d@10": {
+        "found": 254,
+        "total": 1008,
+        "recall": 0.252
+      },
+      "recent popularity 90d@50": {
+        "found": 711,
+        "total": 1008,
+        "recall": 0.7054
+      },
+      "CBF tokens@10": {
+        "found": 86,
+        "total": 1008,
+        "recall": 0.0853
+      },
+      "CBF tokens@50": {
+        "found": 158,
+        "total": 1008,
+        "recall": 0.1567
+      },
+      "TF-IDF text@10": {
+        "found": 197,
+        "total": 1008,
+        "recall": 0.1954
+      },
+      "TF-IDF text@50": {
+        "found": 491,
+        "total": 1008,
+        "recall": 0.4871
+      }
+    },
+    "seconds": 8.4
+  }
+}

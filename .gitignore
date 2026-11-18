@@ -1,0 +1,12 @@
+.venv/
+data/
+outputs/
+cache/
+logs/
+__pycache__/
+*.pyc
+.DS_Store
+report/*
+!report/pack_session.py
+*.jsonl
+session*.json

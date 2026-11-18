@@ -1,0 +1,10 @@
+{
+  "url": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B/resolve/97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3/model.safetensors",
+  "measured_at_utc": "2026-11-18T13:21:34+00:00",
+  "http_code": "206",
+  "bytes": 4000000,
+  "bytes_per_second": 351267.0,
+  "seconds": 11.387348,
+  "file_size_bytes": 1191586416,
+  "estimated_full_download_hours": 0.9
+}
