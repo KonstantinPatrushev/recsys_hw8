@@ -1,0 +1,60 @@
+{
+  "model": "Qwen/Qwen3-Embedding-0.6B",
+  "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+  "device": "mps",
+  "torch": "2.11.0",
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "assets_embedded": 767,
+  "embedding_dim": 1024,
+  "load_seconds": 1.6,
+  "encode_seconds": 17.1,
+  "text_fields": "assetName, assetShortName, assetCategory, assetSubCategory, sector, industry, marketID",
+  "demo_100": {
+    "users": 100,
+    "nonempty_truth_users": 11,
+    "repeat + LLM-embedding explore fill": {
+      "ndcg_at_10": 0.032565,
+      "ndcg_at_10_nonempty": 0.296042
+    },
+    "oracle split: repeat newest-first + LLM-embedding explore": {
+      "ndcg_at_10": 0.040699,
+      "ndcg_at_10_nonempty": 0.369987
+    },
+    "explore_recall_of_never_bought_purchases": {
+      "LLM embedding@10": {
+        "found": 2,
+        "total": 6,
+        "recall": 0.3333
+      },
+      "LLM embedding@50": {
+        "found": 4,
+        "total": 6,
+        "recall": 0.6667
+      }
+    }
+  },
+  "warm_all": {
+    "users": 10404,
+    "nonempty_truth_users": 1178,
+    "repeat + LLM-embedding explore fill": {
+      "ndcg_at_10": 0.051159,
+      "ndcg_at_10_nonempty": 0.451833
+    },
+    "oracle split: repeat newest-first + LLM-embedding explore": {
+      "ndcg_at_10": 0.052381,
+      "ndcg_at_10_nonempty": 0.462621
+    },
+    "explore_recall_of_never_bought_purchases": {
+      "LLM embedding@10": {
+        "found": 99,
+        "total": 1008,
+        "recall": 0.0982
+      },
+      "LLM embedding@50": {
+        "found": 234,
+        "total": 1008,
+        "recall": 0.2321
+      }
+    }
+  }
+}

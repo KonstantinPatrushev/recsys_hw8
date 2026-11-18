@@ -113,14 +113,25 @@ def main():
         ("Repeat channel + recent-popularity (90 d) fill", "repeat + recent-popularity (90 days) explore fill"),
         ("Repeat channel by buy count, then recency", "repeat ordered by buy count, then recency + popularity fill")])
     enc_sentence = "."
+    enc_finding = ""
+    abs_enc = ""
     enc_rows = ""
     if enc:
         ek = "repeat + LLM-embedding explore fill"
         enc_rows = row("Repeat channel + LLM-embedding explore fill (A1 pilot, " + esc(enc['model'].split('/')[-1]) + ")",
                        enc["demo_100"][ek], enc["warm_all"][ek])
         er = enc["warm_all"]["explore_recall_of_never_bought_purchases"]["LLM embedding@10"]["recall"]
-        enc_sentence = (f"; the pilot encoder finds {pct(er)} (A1 row; embedding of {enc['assets_embedded']} assets took "
-                        f"{enc['encode_seconds']} s on {enc['device'].upper()}).")
+        er50 = enc["warm_all"]["explore_recall_of_never_bought_purchases"]["LLM embedding@50"]["recall"]
+        a1w = enc["warm_all"][ek]["ndcg_at_10_nonempty"]
+        a1d = enc["demo_100"][ek]["ndcg_at_10_nonempty"]
+        enc_sentence = (f"; the similarity-only LLM encoder finds {pct(er)} in its top 10 and {pct(er50)} in its top 50 "
+                        f"(popularity {pct(rec['popularity@50']['recall'])}); embedding the {enc['assets_embedded']} assets took "
+                        f"{enc['encode_seconds']} s on {enc['device'].upper()}.")
+        abs_enc = f", and a similarity-only LLM encoder lowered the score to {f3(a1w)}"
+        enc_finding = (f" (e) The encoder as first specified is a negative result: filling latest buy with its similarity-only list lowers the "
+                       f"warm-cohort score from {f3(lbw)} to {f3(a1w)}, although it looks better on the 11 demo customers ({f3(a1d)} vs {f3(lbd)}). "
+                       f"New purchases follow popularity (their median popularity rank is {d['warm_cohort']['new_items_global_popularity_rank_quantiles']['0.5']} "
+                       f"of {n0(d['eligible_assets'])}) more than similarity to the customer&rsquo;s past assets, hence the revised encoder in &sect;3.2.")
     oracle_rows = "".join(row(lab, M(PD, k), M(PW, k)) for lab, k in [
         ("Oracle: best per-user repeat/explore split (popularity)", "oracle split: repeat newest-first + popularity explore"),
         ("Oracle: perfect order inside the repeat channel", "oracle order inside repeat channel + popularity fill")])
@@ -162,14 +173,13 @@ def main():
 LLM4Rec project, Session 1 &mdash; Research Question and Minimal Study Plan (individual) &nbsp;&middot;&nbsp; Track: Hybrid &nbsp;&middot;&nbsp; State: {status}</div>
 
 <h2>Abstract</h2>
-<p class="abstract">In FAR-Trans [{R['fartrans']}], {pct(w['share_repeat_items'])} of the future purchases of customers with a purchase history repeat an asset
-they already bought, and on the full warm cohort a list of their past buys ordered by recency (&ldquo;latest buy&rdquo;) is the strongest of the
-course&rsquo;s classical baselines (nDCG@10 {f3(lbw)} for the {n0(w['nonempty_truth_users'])} customers with a purchase in the label window, against {f3(pop_w)} for popularity).
-I plan a hybrid in which an open-weight embedding encoder proposes never-bought assets and an open-weight LLM ranker orders the customer&rsquo;s
-past assets together with those proposals, compared with latest buy in a 2&times;2 encoder/ranker ablation with same-information classical controls.
-A pilot without any LLM shows where the headroom is: a perfect order inside the past assets would raise nDCG@10 from {f3(lbw)} to {f3(or_rep)},
-whereas the best per-user split between past and new assets reaches only {f3(or_split)}. The ranker&rsquo;s ordering of known assets, not the
-discovery of new ones, is therefore the first thing an LLM must improve, and the design reports a negative or null result just as clearly.</p>
+<p class="abstract">In FAR-Trans [{R['fartrans']}], {pct(w['share_repeat_items'])} of the future purchases of customers with a history repeat an
+earlier buy, and on the full warm cohort a recency list of past buys (&ldquo;latest buy&rdquo;) is the strongest course baseline (nDCG@10
+{f3(lbw)} for the {n0(w['nonempty_truth_users'])} customers who buy, against {f3(pop_w)} for popularity). I plan a hybrid in which an open-weight
+embedding encoder proposes never-bought assets and an open-weight LLM ranker orders the customer&rsquo;s past assets together with them,
+tested against latest buy in a 2&times;2 encoder/ranker ablation with same-information classical controls. A pilot without the LLM ranker
+locates the headroom: a perfect order of past assets would reach {f3(or_rep)}, the best split between past and new assets only
+{f3(or_split)}{abs_enc}. An LLM must first improve the ordering of known assets, and the design reports a null result as clearly as a gain.</p>
 
 <h2>1. Introduction</h2>
 <p><b>Problem.</b> The shared task ranks ten assets per customer and scores the list by nDCG@10 against the assets the customer actually
@@ -233,7 +243,8 @@ become labels (<code>data_example.json</code>).</p>
 <li><b>Control (A0).</b> Latest buy: past assets newest first, the remaining slots filled by popularity. Same inputs as the hybrid: dated past
 Buy/Sell events, Buy counts and as-of asset metadata; no profile, prices or amounts for any method.</li>
 <li><b>Encoder (E).</b> {esc(lit['models']['encoder'])} embeds the text of every eligible asset; a customer vector is the Buy-count-weighted sum of the
-vectors of their past assets; the 20 most similar never-bought assets form the explore candidates.</li>
+vectors of their past assets. The similarity-only version lost to popularity in the pilot (§4), so E re-scores the 50 most popular never-bought
+assets by similarity and passes the top 20 as explore candidates; the similarity-only version stays as an ablation.</li>
 <li><b>Ranker (R).</b> {esc(lit['models']['ranker'])}, greedy decoding with thinking disabled, receives the dated events of the repeat channel and
 the explore candidates and returns ten unique ISINs from that pool. An invalid answer falls back to the control&rsquo;s list; fallbacks are
 counted and reported separately from valid outputs.</li>
@@ -249,6 +260,9 @@ through pretraining.</li>
 <li><b>Measures.</b> nDCG@10 (all customers; customers with purchases and their count) to four decimals, also split into customers whose
 window purchases are only repeats versus those with new assets, as [{R['li23']}] advise; explore recall@10 for the encoder; the ranker&rsquo;s
 invalid-output rate; end-to-end recommendation time per customer, which also breaks benchmark ties; hardware.</li>
+<li><b>Selection rule.</b> The pilot in §4 is exploratory and ran on the shared cutoff. All later choices (encoder variant, candidate
+counts, prompt) are made on a validation cutoff (1 January 2021: {n0(prof['2021-01-01']['warm_users'])} warm customers,
+{n0(prof['2021-01-01']['warm_cohort']['nonempty_truth_users'])} with purchases), and the shared cutoff is used once for the final comparison.</li>
 <li><b>Variance.</b> Greedy decoding is deterministic for a fixed prompt, but LLM rankers depend on candidate order [{R['llmrank']}]: R runs
 with three shuffled candidate orders and the spread is reported; differences to A0 get a paired per-customer bootstrap interval as a
 descriptive range. No LLM acts as a judge: the only ground truth is observed purchases.</li>
@@ -269,13 +283,13 @@ no re-identification, aggregates published, raw customer IDs not committed. Cont
      + esc(enc['model']) + ' on ' + esc(enc['device'].upper()) + ', no LLM ranker) were run; the LLM ranker is planned.') if enc else
     'Only classical components were run: the four starter baselines and a pilot that reuses the starter&rsquo;s loading rules, with no LLM. The LLM encoder and ranker are planned; no LLM number appears in this report.'}</p>
 <div class="avoid"><table>
-<tr><th>Method (no LLM)</th><th class=n>Demo: all</th><th class=n>Demo: with purchases</th><th class=n>Warm: all</th><th class=n>Warm: with purchases</th></tr>
+<tr><th>{'Method' if enc else 'Method (no LLM)'}</th><th class=n>Demo: all</th><th class=n>Demo: with purchases</th><th class=n>Warm: all</th><th class=n>Warm: with purchases</th></tr>
 {base_rows}{pilot_rows}{enc_rows}{oracle_rows}
 </table>
 <p class="cap">Table 2. nDCG@10, cutoff 2021-06-01, 30-day window. Demo = the starter&rsquo;s 100 users ({bd['methods']['popularity']['nonempty_truth_users']} with
 purchases); warm = all {n0(pw_['users'])} warm customers ({n0(bw['methods']['popularity']['nonempty_truth_users'])} with purchases). The starter&rsquo;s
 <code>protocol_hash</code> prefixes are {pd_['protocol_hash'][:12]} and {pw_['protocol_hash'][:12]}. Oracle rows use the labels and are upper bounds,
-not methods. Files: <code>baseline_*_metrics.json</code>, <code>pilot_headroom.json</code>.</p></div>
+not methods. Files: <code>baseline_*_metrics.json</code>, <code>pilot_headroom.json</code>{', <code>pilot_encoder.json</code>' if enc else ''}.</p></div>
 <p><b>Verification.</b> A second implementation in polars that shares no code with the starter reproduces the cohort counts, the
 {n0(w['repeat_items'])} repeat purchases out of {n0(w['truth_items'])} and the warm-cohort nDCG@10 of latest buy to within 10<sup>&minus;12</sup>
 (<code>check_independent.json</code>); the starter&rsquo;s own 58 unit tests pass.</p>
@@ -286,7 +300,7 @@ finds {pct(rec['popularity@10']['recall'])} in its top 10 (recent popularity {pc
 {pct(rec['TF-IDF text@10']['recall'])}, CBF tokens {pct(rec['CBF tokens@10']['recall'])}) &mdash; the bar the LLM encoder must clear{enc_sentence}
 (d) The demo slice is too small to rank methods: ordering past assets by Buy count beats latest buy on the demo ({f3(freq_d)} vs {f3(lbd)})
 but loses on the warm cohort ({f3(freq_w)} vs {f3(lbw)}). The planned evaluation therefore reports the demo, as the course requires, and the
-full warm cohort as the main comparison.</p>
+full warm cohort as the main comparison.{enc_finding}</p>
 
 <h2>5. Discussion</h2>
 <p><b>Team discussion.</b> <span class="todo">{esc(team['discussion'])}</span></p>
@@ -295,10 +309,11 @@ full warm cohort as the main comparison.</p>
 <li><b>Agreement and unresolved differences.</b> <span class="todo">{esc(team['agreement'])}</span></li>
 <li><b>My contribution.</b> <span class="todo">{esc(team['contribution'])}</span></li>
 <li><b>My position and reasons.</b> I adopt the repeat-aware hybrid because the pilot locates the headroom in the ordering of known assets
-(oracle +{f3(or_rep - lbw)}) and only a small part in exploration (+{f3(or_split - lbw)}), so a design that tests the two LLM components
-separately can explain either outcome.</li>
+(oracle +{f3(or_rep - lbw)}) and only a small part in exploration (+{f3(or_split - lbw)}), and the similarity-only encoder already lost to
+popularity; a design that tests the two LLM components separately can explain either outcome.</li>
 </ul>
-<p><b>Threats to validity.</b> The protocol is still pending and may change the cohort; {bd['methods']['popularity']['nonempty_truth_users']} labelled
+<p><b>Threats to validity.</b> The protocol is still pending and may change the cohort; the pilot looked at the shared cutoff, which is why
+later choices move to a validation cutoff; {bd['methods']['popularity']['nonempty_truth_users']} labelled
 customers in the demo cannot rank methods; pretraining may leak post-cutoff knowledge through asset names; LLM rankers have position bias
 and can return invalid lists; the oracle bounds are not achievable targets.</p>
 <p><b>Meaning of the outcomes.</b> If A2 or A3 beats A0 and C2, an LLM adds ordering skill beyond the information it is given. If only A1
