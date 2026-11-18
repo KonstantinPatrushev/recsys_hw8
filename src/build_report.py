@@ -76,6 +76,11 @@ def main():
     bd, bw = j("baseline_demo100_metrics.json"), j("baseline_warm_all_metrics.json")
     pd_, pw_ = j("baseline_demo100_protocol_summary.json"), j("baseline_warm_all_protocol_summary.json")
     team = j("team.json")
+    chk = j("check_independent.json")
+    assert chk["all_match"], "independent check failed"
+    enc = j("pilot_encoder.json") if (EV / "pilot_encoder.json").exists() else None
+    status = ("planned; a classical pilot and an encoder-only pilot were run" if enc else
+              "planned; a classical pilot (no LLM) was run")
     PW, PD = pil["warm_all"], pil["demo_100"]
     M = lambda r, k: r["methods"][k]
     LB = "latest_buy (repeat newest-first + popularity fill)"
@@ -106,6 +111,15 @@ def main():
         ("Repeat channel + TF-IDF-text explore fill (encoder control)", "repeat + TF-IDF-text explore fill"),
         ("Repeat channel + recent-popularity (90 d) fill", "repeat + recent-popularity (90 days) explore fill"),
         ("Repeat channel by buy count, then recency", "repeat ordered by buy count, then recency + popularity fill")])
+    enc_sentence = "."
+    enc_rows = ""
+    if enc:
+        ek = "repeat + LLM-embedding explore fill"
+        enc_rows = row("Repeat channel + LLM-embedding explore fill (A1 pilot, " + esc(enc['model'].split('/')[-1]) + ")",
+                       enc["demo_100"][ek], enc["warm_all"][ek])
+        er = enc["warm_all"]["explore_recall_of_never_bought_purchases"]["LLM embedding@10"]["recall"]
+        enc_sentence = (f"; the pilot encoder finds {pct(er)} (A1 row; embedding of {enc['assets_embedded']} assets took "
+                        f"{enc['encode_seconds']} s on {enc['device'].upper()}).")
     oracle_rows = "".join(row(lab, M(PD, k), M(PW, k)) for lab, k in [
         ("Oracle: best per-user repeat/explore split (popularity)", "oracle split: repeat newest-first + popularity explore"),
         ("Oracle: perfect order inside the repeat channel", "oracle order inside repeat channel + popularity fill")])
@@ -144,7 +158,7 @@ def main():
 
 <h1>Repeat or Explore? A Study Plan for a Hybrid LLM Encoder&ndash;Ranker<br>on FAR-Trans Financial Asset Recommendation</h1>
 <div class="meta">Student: Konstantin Patrushev &nbsp;&nbsp; Team: <span class="{'' if team['name'] else 'todo'}">{esc(team['name'] or '[team name]')}</span> &nbsp;&nbsp; Date: 2026-11-18 &nbsp;&nbsp; Email: kapatrushev@edu.hse.ru<br>
-LLM4Rec project, Session 1 &mdash; Research Question and Minimal Study Plan (individual) &nbsp;&middot;&nbsp; Track: Hybrid &nbsp;&middot;&nbsp; State: planned; a classical pilot (no LLM) was run</div>
+LLM4Rec project, Session 1 &mdash; Research Question and Minimal Study Plan (individual) &nbsp;&middot;&nbsp; Track: Hybrid &nbsp;&middot;&nbsp; State: {status}</div>
 
 <h2>Abstract</h2>
 <p class="abstract">In FAR-Trans [{R['fartrans']}], {pct(w['share_repeat_items'])} of the future purchases of customers with a purchase history repeat an asset
@@ -170,7 +184,7 @@ never-bought assets plus an open-weight LLM ranker that orders the customer&rsqu
 nDCG@10 over the latest-buy baseline for warm FAR-Trans customers at the shared cutoff.</i> Intervention: the encoder&ndash;ranker hybrid.
 Outcome: nDCG@10 over all evaluated customers (empty truth counts as zero), with the mean over customers with purchases reported
 separately. Comparator: latest buy (past buys newest first, filled with popular assets), which uses the same past events and asset
-metadata. Population: warm customers at the shared cutoff. Track: Hybrid; status: planned, with a classical pilot already run (§4).</p>
+metadata. Population: warm customers at the shared cutoff. Track: Hybrid; status: {status} (§4).</p>
 <p><b>Research importance.</b> In e-commerce, repeat purchases carry most of the accuracy of sequential recommenders while
 exploration stays hard [{R['li23']}], and dedicated repeat modules are strong [{R['repeatnet']}], [{R['trex']}]. LLM rankers struggle with the
 order of a history and show position and popularity bias [{R['llmrank']}], and off-the-shelf LLM scores of repurchase candidates have lost to
@@ -249,21 +263,25 @@ no re-identification, aggregates published, raw customer IDs not committed. Cont
 </ul>
 
 <h2>4. Experiments</h2>
-<p>Only classical components were run: the four starter baselines and a pilot that reuses the starter&rsquo;s loading rules, with no LLM.
-The LLM encoder and ranker are planned; no LLM number appears in this report.</p>
+<p>{('The four starter baselines, a classical pilot that reuses the starter&rsquo;s loading rules, and the encoder side of the hybrid (A1: '
+     + esc(enc['model']) + ' on ' + esc(enc['device'].upper()) + ', no LLM ranker) were run; the LLM ranker is planned.') if enc else
+    'Only classical components were run: the four starter baselines and a pilot that reuses the starter&rsquo;s loading rules, with no LLM. The LLM encoder and ranker are planned; no LLM number appears in this report.'}</p>
 <div class="avoid"><table>
 <tr><th>Method (no LLM)</th><th class=n>Demo: all</th><th class=n>Demo: with purchases</th><th class=n>Warm: all</th><th class=n>Warm: with purchases</th></tr>
-{base_rows}{pilot_rows}{oracle_rows}
+{base_rows}{pilot_rows}{enc_rows}{oracle_rows}
 </table>
 <p class="cap">Table 2. nDCG@10, cutoff 2021-06-01, 30-day window. Demo = the starter&rsquo;s 100 users ({bd['methods']['popularity']['nonempty_truth_users']} with
 purchases); warm = all {n0(pw_['users'])} warm customers ({n0(bw['methods']['popularity']['nonempty_truth_users'])} with purchases). The starter&rsquo;s
 <code>protocol_hash</code> prefixes are {pd_['protocol_hash'][:12]} and {pw_['protocol_hash'][:12]}. Oracle rows use the labels and are upper bounds,
 not methods. Files: <code>baseline_*_metrics.json</code>, <code>pilot_headroom.json</code>.</p></div>
+<p><b>Verification.</b> A second implementation in polars that shares no code with the starter reproduces the cohort counts, the
+{n0(w['repeat_items'])} repeat purchases out of {n0(w['truth_items'])} and the warm-cohort nDCG@10 of latest buy to within 10<sup>&minus;12</sup>
+(<code>check_independent.json</code>); the starter&rsquo;s own 58 unit tests pass.</p>
 <p><b>What the pilot says.</b> (a) The recency rule is hard to beat with simple changes: replacing its popularity fill by CBF tokens, TF-IDF text
 or recent popularity does not raise the warm-cohort score. (b) The headroom sits inside the repeat channel: the oracle order of past assets
 reaches {f3(or_rep)} against {f3(lbw)}, while the best repeat/explore split reaches {f3(or_split)}. (c) For never-bought purchases, popularity
 finds {pct(rec['popularity@10']['recall'])} in its top 10 (recent popularity {pct(rec['recent popularity 90d@10']['recall'])}, TF-IDF text
-{pct(rec['TF-IDF text@10']['recall'])}, CBF tokens {pct(rec['CBF tokens@10']['recall'])}) &mdash; the bar the LLM encoder must clear.
+{pct(rec['TF-IDF text@10']['recall'])}, CBF tokens {pct(rec['CBF tokens@10']['recall'])}) &mdash; the bar the LLM encoder must clear{enc_sentence}
 (d) The demo slice is too small to rank methods: ordering past assets by Buy count beats latest buy on the demo ({f3(freq_d)} vs {f3(lbd)})
 but loses on the warm cohort ({f3(freq_w)} vs {f3(lbw)}). The planned evaluation therefore reports the demo, as the course requires, and the
 full warm cohort as the main comparison.</p>
