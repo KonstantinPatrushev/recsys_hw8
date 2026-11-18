@@ -77,6 +77,7 @@ def main():
     pd_, pw_ = j("baseline_demo100_protocol_summary.json"), j("baseline_warm_all_protocol_summary.json")
     team = j("team.json")
     chk = j("check_independent.json")
+    dl = j("download_speed.json")
     assert chk["all_match"], "independent check failed"
     enc = j("pilot_encoder.json") if (EV / "pilot_encoder.json").exists() else None
     status = ("planned; a classical pilot and an encoder-only pilot were run" if enc else
@@ -255,8 +256,9 @@ descriptive range. No LLM acts as a judge: the only ground truth is observed pur
 Session 3: (optional RAG) richer retrieved context for R. Session 4: (optional) LoRA tuning of R on earlier cutoffs only. Session 5: the
 full warm cohort and a second cutoff, ablations, failure analysis. Session 6: defence. Compute: Apple M5 laptop (24 GB, MPS) or a cloud GPU;
 E embeds {n0(d['eligible_assets'])} assets once, R makes one call per evaluated customer ({n0(pd_['users'])} for the demo,
-{n0(pw_['users'])} for the warm cohort). A practical bottleneck: on my connection the encoder weights (1.19 GB) downloaded from the Hugging Face
-CDN at about 72 KB/s, so the weights will be fetched once in advance or the runs moved to a cloud runtime.</li>
+{n0(pw_['users'])} for the warm cohort). A practical bottleneck is the download: in a measured test the encoder weights
+({rnd(dl['file_size_bytes'] / 1e9, 2)} GB) came from the Hugging Face CDN at {rnd(dl['bytes_per_second'] / 1e6, 2)} MB/s
+(<code>download_speed.json</code>), so weights are fetched once in advance, or the runs move to a cloud runtime.</li>
 <li><b>Risks.</b> Ethics: the output is not investment advice and nDCG@10 is not suitability or profit. Privacy: pseudonymous IDs only,
 no re-identification, aggregates published, raw customer IDs not committed. Contamination: as above. Small samples: the demo has only
 {bd['methods']['popularity']['nonempty_truth_users']} customers with purchases (§4).</li>
