@@ -77,7 +77,9 @@ def main():
     c = lambda k: f"[{num[k]}]"
     lab = j("hw2_labelled_sample_60.json") if (EV / "hw2_labelled_sample_60.json").exists() else None
     lab_an = j("hw2_labelled_analysis.json") if (EV / "hw2_labelled_analysis.json").exists() else None
-    T = prose(h, an, warm, lab, lab_an)
+    hc = team.get("hand_check", "")
+    hand = f'<span class="todo">{esc(hc)}</span>' if hc.startswith("[") else esc(hc)
+    T = prose(h, an, warm, lab, lab_an, hand)
     lab_block = ""
     if lab:
         LM, LA, lrt = lab["metrics"], lab_an["arms"], lab["runtime"]
@@ -241,7 +243,7 @@ unmodified session lines of this homework (xz + base64 inside JSON, because the 
         print("pdf:", REP / PDF_NAME)
 
 
-def prose(h, an, warm, lab=None, lab_an=None):
+def prose(h, an, warm, lab=None, lab_an=None, hand=""):
     """Result-dependent sentences, written after reading hw2_metrics.json / hw2_analysis.json."""
     M, A, L, ex = h["metrics"], an["arms"], an["llm"], an["example_user"]
     k2, k3, k1 = "A2_llm_ranker_popularity", "A3_llm_ranker_encoder_hybrid", "A1_rule_encoder_fill"
@@ -285,7 +287,7 @@ def prose(h, an, warm, lab=None, lab_an=None):
         f"(d) Hand check, customer <code>{ex['user_id'][:10]}&hellip;</code> (largest A3 vs latest-buy difference): one future purchase, "
         f"<code>{ex['truth'][0]}</code>, never bought before; latest buy does not list it (nDCG@10 {f4(ex['latest_buy_ndcg'])}); "
         f"A3 at rank {u3}, so nDCG@10 = (1/log<sub>2</sub>(5+1))/1 = {f4(ex['A3_ndcg'])}. "
-        f"<span class=\"todo\">[to be confirmed by me after recomputing this customer by hand from the raw CSV]</span>")
+        f"{hand}")
     lab_disc = ""
     if lab:
         LM = lab["metrics"]

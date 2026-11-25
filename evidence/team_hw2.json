@@ -5,5 +5,6 @@
   "mine": "the ranker and hybrid arms A2/A3 with the A1 ablation, the prompt and output check, the run on the starter protocol, the full-warm rule-only run, the checks in Section 4 and this report (written with an AI assistant, Section 6).",
   "shared": "the course starter and its four baselines; the prefix/fill split proposed by Mark Starchenko; the encoder model is the one Aleksei Kosychev uses for his encoder-only study.",
   "verified": "[to be completed by me: only checks I actually did, e.g. the hand check of the customer in Section 4 against transactions.csv and predictions.csv, and reading that customer's prompt and answer in generations.jsonl]",
-  "trusted": "[to be completed by me: what I took from the code and the AI without checking]"
+  "trusted": "[to be completed by me: what I took from the code and the AI without checking]",
+  "hand_check": "[to be confirmed by me after recomputing this customer by hand from the raw CSV]"
 }
