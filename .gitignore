@@ -10,3 +10,4 @@ report/*
 !report/pack_session.py
 *.jsonl
 session*.json
+!report/pack_session_hw2.py

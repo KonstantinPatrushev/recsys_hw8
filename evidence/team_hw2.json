@@ -1,0 +1,9 @@
+{
+  "name": "Name",
+  "documented": "Documented so far: in Session 1 Mark Starchenko sent written proposals through the team repository (PR #1 “Starchenko/session1 proposals”, merged 2026-11-18): split latest buy into its prefix (the ranker question) and its fill (the encoder question), which gives the baseline / encoder-only / ranker-only / both ablation used here, and a logistic-regression ranker of past assets as the classical control. For HW2 the team agreed that each member first builds an individual solution and the solutions are merged afterwards. Aleksei Kosychev's individual solution tests the encoder fill with the same embedding model on nine development cutoffs and finds it the worst fill for customers who buy an asset new to them; my A1 result on the full warm cohort points the same way.",
+  "todo": "[to be completed after the team merge: what the team decided from the individual solutions, which parts of mine are kept or dropped, and which questions stay open]",
+  "mine": "the ranker and hybrid arms A2/A3 with the A1 ablation, the prompt and output check, the run on the starter protocol, the full-warm rule-only run, the checks in Section 4 and this report (written with an AI assistant, Section 6).",
+  "shared": "the course starter and its four baselines; the prefix/fill split proposed by Mark Starchenko; the encoder model is the one Aleksei Kosychev uses for his encoder-only study.",
+  "verified": "[to be completed by me: only checks I actually did, e.g. the hand check of the customer in Section 4 against transactions.csv and predictions.csv, and reading that customer's prompt and answer in generations.jsonl]",
+  "trusted": "[to be completed by me: what I took from the code and the AI without checking]"
+}
