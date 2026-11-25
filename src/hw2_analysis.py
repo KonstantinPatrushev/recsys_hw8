@@ -8,7 +8,7 @@ Reads outputs/hw2/{predictions.csv, per_user.csv, generations.jsonl} and evidenc
   * LLM behaviour: copies of the input order, group-B picks, failure reasons, seconds and tokens per call;
   * one customer for the hand check (A0 vs A3 lists, truth, hit positions, the raw LLM answer).
 
-Run: .venv/bin/python -I src/hw2_analysis.py
+Run: .venv/bin/python -I src/hw2_analysis.py [outputs/<run> <evidence file name>]
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ import hashlib
 import json
 import math
 import pathlib
+import re
 import statistics
 from collections import Counter, defaultdict
 from datetime import date, timedelta
@@ -37,7 +38,10 @@ def ndcg(lst, rel):
 
 
 def main():
-    h = json.loads((ROOT / "evidence" / "hw2_metrics.json").read_text())
+    import sys
+    OUT = ROOT / (sys.argv[1] if len(sys.argv) > 1 else "outputs/hw2")
+    dest = (ROOT / "evidence" / sys.argv[2] if len(sys.argv) > 2 else
+            ROOT / "evidence" / "hw2_analysis.json" if len(sys.argv) == 1 else OUT / "analysis_test.json")
     pred = defaultdict(dict)
     with (OUT / "predictions.csv").open() as f:
         for r in csv.DictReader(f):
@@ -104,23 +108,30 @@ def main():
         g = [x for x in gens if x["arm"] == arm]
         if not g:
             continue
-        copies, b_picks, a_order_kept, a_moved = 0, [], 0, 0
+        copies, b_picks, a_order_kept, a_all = 0, [], 0, 0
+        by_size = defaultdict(lambda: [0, 0])  # group-A size bucket -> [calls, invalid]
         for x in g:
             payload = json.loads(x["prompt"].split("\n", 1)[1])
             ga = [r["ISIN"] for r in payload["group_A_bought_before"]]
             gb = [r["ISIN"] for r in payload["group_B_never_bought"]]
+            bucket = "1" if len(ga) == 1 else "2-3" if len(ga) <= 3 else "4+"
+            by_size[bucket][0] += 1
+            by_size[bucket][1] += not x["valid"]
             if not x["valid"]:
                 continue
-            arr = json.loads(x["response"]["text"][x["response"]["text"].index("["):x["response"]["text"].rindex("]") + 1])
+            arr = json.loads(re.search(r"\[[^\[\]]*\]", x["response"]["text"], re.S).group(0))  # as in parse_ranking
             copies += arr == (ga + gb)[:10]
             b_picks.append(sum(i in set(gb) for i in arr))
             a_in = [i for i in arr if i in set(ga)]
             a_order_kept += a_in == [i for i in ga if i in set(a_in)]
+            a_all += len(a_in) == min(len(ga), 10)
         sec = [x["response"]["seconds"] for x in g]
         llm[arm] = {"calls": len(g), "valid": sum(x["valid"] for x in g),
                     "failure_reasons": dict(Counter(x["error"] for x in g if not x["valid"])),
+                    "calls_invalid_by_past_assets": {k: by_size[k] for k in ("1", "2-3", "4+") if k in by_size},
                     "valid_copies_of_input_order": copies,
                     "valid_with_group_A_order_kept": a_order_kept,
+                    "valid_keeping_all_group_A": a_all,
                     "mean_group_B_picks": round(statistics.mean(b_picks), 2) if b_picks else None,
                     "valid_with_no_group_B_pick": sum(b == 0 for b in b_picks),
                     "seconds_mean": round(statistics.mean(sec), 2), "seconds_median": round(statistics.median(sec), 2),
@@ -141,7 +152,7 @@ def main():
         "A3_hit_ranks": [k + 1 for k, i in enumerate(pred[m3][u]) if i in truth[u]],
         "latest_buy_ndcg": ndcg(pred["latest_buy"][u], truth[u]), "A3_ndcg": ndcg(pred[m3][u], truth[u]),
         "A3_valid": g3["valid"], "A3_raw_answer": g3["response"]["text"]}
-    (ROOT / "evidence" / "hw2_analysis.json").write_text(json.dumps(out, indent=2, ensure_ascii=False))
+    dest.write_text(json.dumps(out, indent=2, ensure_ascii=False))
     print(json.dumps({k: v for k, v in out.items() if k != "example_user"}, indent=1))
     print("example:", json.dumps({k: v for k, v in out["example_user"].items() if k != "user_id"}, indent=1))
 

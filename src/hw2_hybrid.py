@@ -138,6 +138,10 @@ def main():
     ap.add_argument("--out", default="outputs/hw2")
     ap.add_argument("--dry", action="store_true", help="plumbing test: the ranker echoes the rule list, no model")
     ap.add_argument("--rule-only", action="store_true", help="no ranker: evaluate A0/A1 only (e.g. on all warm users)")
+    ap.add_argument("--labelled-sample", type=int, default=0,
+                    help="with --max-users 0: run on a seeded random sample of N warm users who have future purchases "
+                         "(the selection uses the labels; the methods never see them)")
+    ap.add_argument("--seed", type=int, default=2026)
     args = ap.parse_args()
     out_dir = ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -158,6 +162,13 @@ def main():
         base[u].update(recent[u])
     pop_order = starter.order(pop)
     pop_rank = {isin: r for r, isin in enumerate(pop_order, 1)}
+    sample_info = None
+    if args.labelled_sample:
+        import random
+        labelled = [u for u in users if truth.get(u, set()) & set(contexts[u]["eligible_asset_ids"])]
+        pick = set(random.Random(args.seed).sample(labelled, args.labelled_sample))
+        users = [u for u in users if u in pick]
+        sample_info = {"seed": args.seed, "size": len(users), "drawn_from_warm_users_with_purchases": len(labelled)}
     t_protocol = time.perf_counter() - t_start
 
     # ---------------- encoder E
@@ -229,8 +240,12 @@ def main():
         pool = [r["ISIN"] for r in group_a] + [r["ISIN"] for r in group_b]
         return INSTRUCTION + "\n" + json.dumps(payload, ensure_ascii=False), pool
 
-    for arm, explore_key, fallback_key in (("A2", "pop_explore", "A0"), ("A3", "enc_explore", "A1")):
-        for n, u in enumerate(users if ranker is not None else [], 1):
+    arms = (("A2", "pop_explore", "A0"), ("A3", "enc_explore", "A1"))
+    # default: all users for A2, then all for A3; labelled sample: both arms per user (paired results if stopped early)
+    jobs = [(a, u) for u in users for a in arms] if args.labelled_sample else [(a, u) for a in arms for u in users]
+    done = Counter()
+    for (arm, explore_key, fallback_key), u in (jobs if ranker is not None else []):
+        if True:
             prompt, pool = prompt_for(u, plan[u][explore_key])
             res = ranker.generate(prompt)
             ranking, err = parse_ranking(res["text"], pool)
@@ -244,8 +259,9 @@ def main():
             log.write(json.dumps({"arm": arm, "user": hashlib.sha256(u.encode()).hexdigest()[:12], "prompt": prompt,
                                   "response": res, "valid": err is None, "error": err}, ensure_ascii=False) + "\n")
             log.flush()
-            if n % 10 == 0:
-                print(f"{arm} {n}/{len(users)} users, {llm_seconds[arm]:.0f} s, failed {len(failures[arm])}", flush=True)
+            done[arm] += 1
+            if done[arm] % 10 == 0:
+                print(f"{arm} {done[arm]}/{len(users)} users, {llm_seconds[arm]:.0f} s, failed {len(failures[arm])}", flush=True)
     log.close()
 
     # ---------------- evaluation with the starter's nDCG@10 and aggregation
@@ -273,15 +289,22 @@ def main():
     metrics = {m: starter.aggregate([r for r in per_user if r["method"] == m]) for m in names.values()}
     if args.rule_only:
         metrics = {k: v for k, v in metrics.items() if not k.startswith(("A2", "A3"))}
-    starter_metrics = json.loads((ROOT / "outputs" / ref_name / "metrics.json").read_text())["methods"]
-    for m in ("popularity", "cbf", "latest_buy", "latest_buy_or_sell"):
-        assert abs(metrics[m]["ndcg_at_10"] - starter_metrics[m]["ndcg_at_10"]) < 1e-15, m
+    if args.labelled_sample:  # subset: compare the baselines per user with the starter's warm run
+        ref_pu = {(r["method"], r["user_id"]): float(r["ndcg_at_10"])
+                  for r in csv.DictReader((ROOT / "outputs" / ref_name / "per_user.csv").open())}
+        for r in per_user:
+            if r["method"] in ("popularity", "cbf", "latest_buy", "latest_buy_or_sell"):
+                assert abs(r["ndcg_at_10"] - ref_pu[(r["method"], r["user_id"])]) < 1e-12, r["method"]
+    else:
+        starter_metrics = json.loads((ROOT / "outputs" / ref_name / "metrics.json").read_text())["methods"]
+        for m in ("popularity", "cbf", "latest_buy", "latest_buy_or_sell"):
+            assert abs(metrics[m]["ndcg_at_10"] - starter_metrics[m]["ndcg_at_10"]) < 1e-15, m
     total = time.perf_counter() - t_start
     runtime = {"protocol_and_baselines_s": round(t_protocol, 1), "encoder_embedding_s": round(t_encoder, 1),
                "rule_arms_s": round(t_rule, 2), "llm_generation_s": {k: round(v, 1) for k, v in llm_seconds.items()},
                "llm_tokens_in_out": dict(tokens), "total_wall_clock_s": round(total, 1)}
     out = {"protocol_hash_of_starter_run": ref["protocol_hash"], "cutoff": CUTOFF, "end_exclusive": end,
-           "users": len(users), "metrics": metrics,
+           "users": len(users), "sample": sample_info, "metrics": metrics,
            "failed_cases": {k: len(v) for k, v in failures.items()}, "failures": dict(failures),
            "runtime": runtime,
            "config": {"encoder": {"model": ENC_MODEL, "revision": ENC_REV, "popular_pool": N_POOL_POP,
@@ -290,7 +313,9 @@ def main():
                       "instruction_sha256": hashlib.sha256(INSTRUCTION.encode()).hexdigest(),
                       "instruction": INSTRUCTION},
            "hardware": {"platform": platform.platform(), "machine": platform.machine()}}
-    if args.rule_only:
+    if args.labelled_sample and not args.dry:
+        (ROOT / "evidence" / f"hw2_labelled_sample_{len(users)}.json").write_text(json.dumps(out, indent=2, ensure_ascii=False))
+    elif args.rule_only:
         (ROOT / "evidence" / f"hw2_rule_only_{len(users)}users.json").write_text(json.dumps(out, indent=2, ensure_ascii=False))
     elif not args.dry:
         (ROOT / "evidence" / "hw2_metrics.json").write_text(json.dumps(out, indent=2, ensure_ascii=False))
