@@ -9,6 +9,7 @@ import html
 import json
 import pathlib
 import subprocess
+from collections import Counter
 from decimal import ROUND_HALF_UP, Decimal
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -20,7 +21,8 @@ REPO = "https://github.com/KonstantinPatrushev/recsys_hw8"
 
 
 def j(name):
-    return json.loads((EV / name).read_text())
+    p = EV / name
+    return json.loads(p.read_text())
 
 
 def rnd(x, d):
@@ -38,13 +40,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pdf", action="store_true")
     ap.add_argument("--commit", default="[commit]")
+    ap.add_argument("--ev", default=None, help="evidence dir override (layout tests)")
     args = ap.parse_args()
+    global EV
+    if args.ev:
+        EV = pathlib.Path(args.ev)
     h = j("hw2_metrics.json")
     an = j("hw2_analysis.json")
     warm = j("hw2_rule_only_10404users.json")
     lit = j("literature.json")
     team = j("team_hw2.json")
-    R = {x["key"]: x["n"] for x in lit["references"]}
     M, rt, fc = h["metrics"], h["runtime"], h["failed_cases"]
     cfg = h["config"]
     rk = cfg["ranker"]
@@ -66,12 +71,40 @@ def main():
     lb, a1, a2, a3 = (M[k] for k in ("latest_buy", "A1_rule_encoder_fill", "A2_llm_ranker_popularity", "A3_llm_ranker_encoder_hybrid"))
     tok = rt["llm_tokens_in_out"]
     per_call = {a: rt["llm_generation_s"][a] / h["users"] for a in ("A2", "A3")}
-    refs = "".join(f"<p>[{x['n']}] {x['ieee']}</p>" for x in lit["references"] if x["key"] in USED)
     num = {k: i + 1 for i, k in enumerate(USED)}
     refs = "".join(f"<p>[{num[x['key']]}] {x['ieee']}</p>" for x in sorted(
         (x for x in lit["references"] if x["key"] in USED), key=lambda x: num[x["key"]]))
     c = lambda k: f"[{num[k]}]"
-    ex = an["example_user"]
+    lab = j("hw2_labelled_sample_60.json") if (EV / "hw2_labelled_sample_60.json").exists() else None
+    lab_an = j("hw2_labelled_analysis.json") if (EV / "hw2_labelled_analysis.json").exists() else None
+    T = prose(h, an, warm, lab, lab_an)
+    lab_block = ""
+    if lab:
+        LM, LA, lrt = lab["metrics"], lab_an["arms"], lab["runtime"]
+        rows3 = [("Popularity", "popularity"), ("CBF", "cbf"), ("Latest buy (= A0)", "latest_buy"), ("Latest buy or sell", "latest_buy_or_sell"),
+                 ("A1 encoder only", "A1_rule_encoder_fill"), ("A2 ranker only", "A2_llm_ranker_popularity"),
+                 ("<b>A3 hybrid</b>", "A3_llm_ranker_encoder_hybrid")]
+        fc3 = {"A2_llm_ranker_popularity": lab["failed_cases"].get("A2", 0), "A3_llm_ranker_encoder_hybrid": lab["failed_cases"].get("A3", 0)}
+        bw = lambda k: "&ndash;" if k == "latest_buy" else f"{LA[k]['nonempty_wins']} / {LA[k]['nonempty_losses']}"
+        t3 = "".join(f"<tr><td>{lab_}</td><td class=n>{LM[k]['users']}</td><td class=n>{LM[k]['nonempty_truth_users']}</td>"
+                     f"<td class=n>{f4(LM[k]['ndcg_at_10_nonempty'])}</td><td class=n>{bw(k)}</td><td class=n>{fc3.get(k, 0)}</td></tr>"
+                     for lab_, k in rows3)
+        lab_block = f"""<p><b>A larger labelled sample.</b> To get more than {lb['nonempty_truth_users']} labelled customers within the deadline, I ran the
+same code (commit 6a729f8) on {lab['users']} customers drawn with seed {lab['sample']['seed']} from the
+{n0(lab['sample']['drawn_from_warm_users_with_purchases'])} warm customers with purchases at the same cutoff. The draw uses the labels, the methods
+do not; every customer has purchases, so only the nonempty mean is meaningful, and it is not comparable to Table 1&rsquo;s all-user column.</p>
+<div class="avoid"><table><tr><th>Method</th><th class=n>Users</th><th class=n>Users with future purchases</th><th class=n>nDCG@10: nonempty truth</th>
+<th class=n>Better / worse than latest buy</th><th class=n>Failed cases</th></tr>{t3}</table>
+<p class="cap">Table 3. Seeded labelled sample (<code>hw2_labelled_sample_{lab['users']}.json</code>, <code>hw2_labelled_analysis.json</code>); LLM generation
+{n0(lrt['llm_generation_s'].get('A2', 0))} s (A2) and {n0(lrt['llm_generation_s'].get('A3', 0))} s (A3); whole run {n0(lrt['total_wall_clock_s'])} s.</p></div>"""
+    L = an["llm"]
+    def inv(a):
+        b = L[a]["calls_invalid_by_past_assets"]
+        return " / ".join(f"{b[k][1]} of {b[k][0]}" for k in ("1", "2-3", "4+") if k in b)
+    llm_rows = "".join(
+        f"<tr><td>{a}</td><td class=n>{L[a]['valid']} of {L[a]['calls']}</td><td class=n>{inv(a)}</td>"
+        f"<td class=n>{L[a]['valid_keeping_all_group_A']}</td><td class=n>{L[a]['mean_group_B_picks']}</td>"
+        f"<td class=n>{L[a]['seconds_mean']} / {L[a]['seconds_max']}</td></tr>" for a in ("A2", "A3"))
 
     doc = f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>Session 2 Report &mdash; LLM ranker over past and new assets on FAR-Trans</title>
@@ -94,17 +127,17 @@ def main():
 </style></head><body>
 <h1>An LLM Ranker over a Customer&rsquo;s Past and New Assets:<br>Implementing the Repeat-Aware Hybrid on FAR-Trans</h1>
 <div class="meta">Student: Konstantin Patrushev &nbsp;&nbsp; Team: {esc(team['name'])} &nbsp;&nbsp; Email: kapatrushev@edu.hse.ru &nbsp;&nbsp; Date: 2026-11-25<br>
-Repository: <a href="{REPO}">{REPO}</a> &nbsp;&nbsp; Experiment commit: <code>{esc(args.commit)}</code><br>
+Repository: <a href="{REPO}">{REPO}</a> &nbsp;&nbsp; Experiment commits: <code>{esc(args.commit)}</code><br>
 LLM4Rec project, Session 2 / Homework 2 &mdash; Implement and Test Your Idea (individual) &nbsp;&middot;&nbsp; Track: Hybrid</div>
 
 <h2>Abstract</h2>
 <p class="abstract">My Session 1 question asked whether an open-weight LLM ranker that orders a customer&rsquo;s past assets together with
-never-bought candidates from an LLM embedding encoder improves nDCG@10 over the provided latest-buy baseline on FAR-Trans {c('fartrans')}.
+never-bought candidates from an LLM embedding encoder improves nDCG@10 over the provided latest-buy baseline on FAR-Trans {c('fartrans')}, {c('dataset')}.
 I implemented the encoder (Qwen3-Embedding-0.6B), the ranker (Qwen3-1.7B, zero-shot, greedy) and their 2&times;2 ablation on the starter&rsquo;s
 100-user protocol, with all four provided baselines. The hybrid scores nDCG@10 {f4(a3['ndcg_at_10'])} over all users and
 {f4(a3['ndcg_at_10_nonempty'])} over the {a3['nonempty_truth_users']} users with purchases, against {f4(lb['ndcg_at_10'])} and
 {f4(lb['ndcg_at_10_nonempty'])} for latest buy, with {fc.get('A3', 0)} invalid outputs and about {rnd(per_call['A3'], 1)} s per customer.
-{esc(an['abstract_takeaway'])}</p>
+{T['abstract_takeaway']}</p>
 
 <h2>1. Introduction</h2>
 <p><b>Question and change.</b> FAR-Trans customers repeat earlier purchases often: in my Session 1 data profile 61% of the future
@@ -132,11 +165,11 @@ starter&rsquo;s own functions; its user list equals the starter run&rsquo;s <cod
 {h['protocol_hash_of_starter_run'][:12]}).</p>
 <ul>
 <li><b>Repeat channel.</b> The customer&rsquo;s eligible past Buy assets, newest first (ISIN breaks ties): exactly the latest-buy prefix.</li>
-<li><b>Encoder E.</b> {esc(cfg['encoder']['model'])} (revision {cfg['encoder']['revision'][:8]}) embeds each eligible asset&rsquo;s as-of text
+<li><b>Encoder E.</b> {esc(cfg['encoder']['model'])} {c('qwen3emb')} (revision {cfg['encoder']['revision'][:8]}) embeds each eligible asset&rsquo;s as-of text
 (name, short name, category, subcategory, sector, industry, market). Customer vector = Buy-count-weighted sum of their past assets&rsquo; vectors.
 E re-scores the {cfg['encoder']['popular_pool']} most popular never-bought assets by cosine similarity and keeps the top
 {cfg['encoder']['explore_candidates']} (the Session 1 pilot showed that similarity alone, without the popularity pool, loses to popularity).</li>
-<li><b>Ranker R.</b> {esc(rk['model'])} (revision {rk['revision'][:8]}, resolved {str(rk.get('resolved_revision'))[:8]}), {esc(rk['dtype'])} on
+<li><b>Ranker R.</b> {esc(rk['model'])} {c('qwen3')} (revision {rk['revision'][:8]}, resolved {str(rk.get('resolved_revision'))[:8]}), {esc(rk['dtype'])} on
 {esc(rk['device'].upper())}, {esc(rk['decoding'])}, thinking disabled, at most {rk['max_new_tokens']} new tokens; torch {esc(rk['torch'])},
 transformers {esc(rk['transformers'])}. The prompt (instruction below) holds group A, the up to {cfg['max_repeat_assets_in_prompt']} newest past
 assets with Buy count, last Buy and last Sell dates, and group B, {cfg['encoder']['explore_candidates']} never-bought candidates with their
@@ -148,8 +181,9 @@ assets (ranker only). A3 = R over group A + E&rsquo;s 10 candidates (both). A1&m
 <pre>{esc(cfg['instruction'])}
 {{"cutoff_date": "2021-06-01", "group_A_bought_before": [{{"ISIN", "name", "category", "subcategory", "sector", "industry", "market",
   "buy_count", "last_buy", "last_sell"}}, ...], "group_B_never_bought": [{{..., "popularity_rank"}}, ...]}}</pre>
-<p><b>Hardware.</b> {esc(h['hardware']['platform'])} (Apple M5, 24 GB). Code: <code>src/hw2_hybrid.py</code>; generations with full prompts are
-logged to <code>outputs/hw2/generations.jsonl</code> (customer IDs hashed; not committed).</p>
+<p><b>Hardware and dependencies.</b> {esc(h['hardware']['platform'])} (Apple M5, 24 GB, PyTorch MPS); Python 3.12, torch {esc(rk['torch'])},
+transformers {esc(rk['transformers'])}, sentence-transformers 5.7.0, numpy, polars. Code: <code>src/hw2_hybrid.py</code> (run command in the README);
+every generation with its full prompt is logged to <code>outputs/hw2/generations.jsonl</code> (customer IDs hashed; not committed).</p>
 
 <h2>4. Experiments</h2>
 <div class="avoid"><table>
@@ -158,23 +192,32 @@ logged to <code>outputs/hw2/generations.jsonl</code> (customer IDs hashed; not c
 {table}</table>
 <p class="cap">Table 1. Starter protocol, 100 users, cutoff 2021-06-01, 30 days (<code>hw2_metrics.json</code>). *The four provided baselines come
 from one starter pass, timed together. A1: embedding all 767 assets once. A2/A3: LLM generation for 100 customers ({n0(tok['A2'][0])} and
-{n0(tok['A3'][0])} prompt tokens, {n0(tok['A2'][1])} and {n0(tok['A3'][1])} output tokens); A3 includes the embedding time. Failed cases fall back to
+{n0(tok['A3'][0])} prompt tokens, {n0(tok['A2'][1])} and {n0(tok['A3'][1])} output tokens); A3 includes the embedding time. Whole run with model loading: {n0(rt['total_wall_clock_s'])} s. Failed cases fall back to
 the rule list and are included in the scores.</p></div>
 <p><b>Beyond the demo.</b> The 100-user sample has only {lb['nonempty_truth_users']} customers with purchases. On all
 {n0(W['latest_buy']['users'])} warm customers ({n0(W['latest_buy']['nonempty_truth_users'])} with purchases) the encoder-only arm A1 scores
 {f4(W['A1_rule_encoder_fill']['ndcg_at_10_nonempty'])} on customers with purchases against {f4(W['latest_buy']['ndcg_at_10_nonempty'])} for latest buy
 (<code>hw2_rule_only_10404users.json</code>): the small demo gain of A1 does not hold at scale. The LLM arms were not run on the full cohort
 (about {rnd(per_call['A3'] * W['latest_buy']['users'] / 3600, 1)} h per arm at the measured speed).</p>
-<p><b>What changed per customer.</b> {an['changes_text']}</p>
+{lab_block}
+<p><b>What changed per customer.</b> {T['changes_text']}</p>
+<div class="avoid"><table>
+<tr><th>Arm</th><th class=n>Valid lists</th><th class=n>Invalid: 1 / 2&ndash;3 / 4+ past assets</th><th class=n>Valid lists keeping all past assets*</th>
+<th class=n>Mean new assets in valid lists</th><th class=n>Seconds per call: mean / max</th></tr>
+{llm_rows}</table>
+<p class="cap">Table 2. Ranker behaviour (<code>hw2_analysis.json</code>). Invalid cells: invalid calls / calls for customers with that many eligible past
+assets. *All of group A when it has at most ten assets, otherwise ten of them.</p></div>
 <p><b>Checks.</b> (a) For all 100 customers A0 equals the starter&rsquo;s latest-buy list and the four baselines&rsquo; nDCG@10 equal the starter&rsquo;s
 <code>metrics.json</code> exactly (assertions in the script). (b) Every date in every prompt precedes the cutoff (assertion); labels are computed
-only after all lists are fixed. (c) {esc(an['hand_check_text'])}</p>
+only after all lists are fixed. (c) {T['hand_check_text']}</p>
 
 <h2>5. Discussion</h2>
-<p><b>What improved and what failed.</b> {an['discussion_text']}</p>
-<p><b>Next experiment.</b> Keep the users, cutoff, pool and prompt fixed and change one thing: run A2/A3 on a validation cutoff (1 January 2021)
-and on the full warm cohort to get more than {lb['nonempty_truth_users']} labelled customers, with three shuffled candidate orders to measure position
-sensitivity, next to the team&rsquo;s logistic-regression ranker of past assets as the same-information classical control.</p>
+<p><b>What improved and what failed.</b> {T['discussion_text']}</p>
+<p><b>Next controlled experiment.</b> <i>Changes:</i> only the ranker&rsquo;s decoding: generation constrained so that each next ISIN is a
+candidate not yet emitted, which makes every answer valid. <i>Fixed:</i> model and revision, prompt, candidate pools, users (the 100 demo customers
+and the seeded labelled sample), cutoff, nDCG@10, fallback rule. Read-out: paired per-customer differences against latest buy and the share of
+answers that copy the rule. If the ranker still mostly copies the rule, the following step is the team&rsquo;s logistic-regression ranker of past
+assets as the same-information classical control, then a validation cutoff (1 January 2021) before any choice is tested again.</p>
 <p><b>Team discussion and individual contribution.</b> {esc(team['documented'])} <span class="todo">{esc(team['todo'])}</span></p>
 <ul><li><b>My work:</b> {esc(team['mine'])}</li><li><b>Shared:</b> {esc(team['shared'])}</li></ul>
 
@@ -197,7 +240,67 @@ unmodified session lines of this homework (xz + base64 inside JSON, because the 
         print("pdf:", REP / PDF_NAME)
 
 
-USED = ["fartrans", "llmrank", "cao26", "li23", "flarko"]
+def prose(h, an, warm, lab=None, lab_an=None):
+    """Result-dependent sentences, written after reading hw2_metrics.json / hw2_analysis.json."""
+    M, A, L, ex = h["metrics"], an["arms"], an["llm"], an["example_user"]
+    k2, k3, k1 = "A2_llm_ranker_popularity", "A3_llm_ranker_encoder_hybrid", "A1_rule_encoder_fill"
+    lb = M["latest_buy"]
+    fail = {a: L[a]["calls"] - L[a]["valid"] for a in ("A2", "A3")}
+    reasons = Counter()
+    for a in ("A2", "A3"):
+        for r, n in L[a]["failure_reasons"].items():
+            reasons["dup" if r.startswith("10 items") else "out" if r.startswith("ISIN outside") else "nojson" if r == "no JSON array" else r] += n
+    wl = lambda d, k: f"{d[k]['nonempty_wins']} better, {d[k]['nonempty_losses']} worse"
+    hits = lambda k: f"{A[k]['hits_repeat']}+{A[k]['hits_new']}"
+    out = {}
+    lab_sent = ""
+    if lab:
+        LM, LA = lab["metrics"], lab_an["arms"]
+        lab_sent = (f" On a seeded sample of {lab['users']} warm customers who have purchases, A3 scores {f4(LM[k3]['ndcg_at_10_nonempty'])} "
+                    f"and A2 {f4(LM[k2]['ndcg_at_10_nonempty'])} against {f4(LM['latest_buy']['ndcg_at_10_nonempty'])} for latest buy.")
+    out["abstract_takeaway"] = (
+        f"On these 100 customers both ranker arms score above all four baselines, but only {lb['nonempty_truth_users']} customers have purchases "
+        f"(A3: {wl(A, k3)} than latest buy), the largest single gain comes from an encoder candidate the ranker left in place, and "
+        f"{fail['A2']}% (A2) and {fail['A3']}% (A3) of the ranker&rsquo;s answers are invalid.{lab_sent} "
+        f"The pipeline runs end to end; the evidence that the LLM ranker helps is not there yet.")
+    out["changes_text"] = (
+        f"Against latest buy, on the {lb['nonempty_truth_users']} customers with purchases: A1 {wl(A, k1)}; A2 {wl(A, k2)}; A3 {wl(A, k3)}; "
+        f"the rest are unchanged. Correct assets in the Top-10 of all 100 customers (repeat + new; there are {an['truth_repeat_items']} + "
+        f"{an['truth_items'] - an['truth_repeat_items']} future purchases): latest buy {hits('latest_buy')}, A1 {hits(k1)}, A2 {hits(k2)}, "
+        f"A3 {hits(k3)}. A2 wins by moving a past asset bought five times from rank 5 to 3 and a popular never-bought asset from rank 7 to 2. "
+        f"A3&rsquo;s largest gain (+0.387) is the encoder&rsquo;s candidate at rank 5, which the ranker left where the rule put it (A1 has the same gain); "
+        f"its largest loss (&minus;0.315) pushes a past asset that the customer bought again out of the Top-10. "
+        f"Of the {fail['A2'] + fail['A3']} invalid answers, {reasons['dup']} repeat an ISIN, {reasons['out']} name an ISIN that is not a "
+        f"candidate and {reasons['nojson']} contain no JSON array; Table 2 splits them by the number of past assets.")
+    ub = ", ".join(map(str, ex["latest_buy_hit_ranks"])) or "none"
+    u3 = ", ".join(map(str, ex["A3_hit_ranks"])) or "none"
+    out["hand_check_text"] = (
+        f"An independent recomputation of nDCG@10 for all seven methods from <code>predictions.csv</code> and the raw "
+        f"<code>transactions.csv</code>, without the starter&rsquo;s code, matches <code>per_user.csv</code> "
+        f"(largest difference {max(an['independent_recompute_max_abs_diff'].values()):.1f}). "
+        f"(d) Hand check, customer <code>{ex['user_id'][:10]}&hellip;</code> (largest A3 vs latest-buy difference): one future purchase, "
+        f"<code>{ex['truth'][0]}</code>, never bought before; latest buy does not list it (nDCG@10 {f4(ex['latest_buy_ndcg'])}); "
+        f"A3 at rank {u3}, so nDCG@10 = (1/log<sub>2</sub>(5+1))/1 = {f4(ex['A3_ndcg'])}. "
+        f"<span class=\"todo\">[to be confirmed by me after recomputing this customer by hand from the raw CSV]</span>")
+    lab_disc = ""
+    if lab:
+        lab_disc = (f" The seeded sample of {lab['users']} labelled warm customers gives A3 {wl(lab_an['arms'], k3)} and A2 {wl(lab_an['arms'], k2)} "
+                    f"than latest buy, with {lab['failed_cases'].get('A3', 0)} and {lab['failed_cases'].get('A2', 0)} invalid answers.")
+    out["discussion_text"] = (
+        f"<i>Improved:</i> on the starter protocol both ranker arms beat all four provided baselines, including popularity "
+        f"({f4(M['popularity']['ndcg_at_10'])}), with every invalid answer kept in the score through the fallback. "
+        f"<i>Failed or unclear:</i> (1) validity: Qwen3-1.7B repeats or invents ISINs in a fifth to a quarter of the answers even with greedy "
+        f"decoding; (2) the ranker mostly keeps the rule: it keeps the order of the past assets in {L['A2']['valid_with_group_A_order_kept']} of "
+        f"{L['A2']['valid']} (A2) and {L['A3']['valid_with_group_A_order_kept']} of {L['A3']['valid']} (A3) valid answers and copies the whole input "
+        f"order in {L['A2']['valid_copies_of_input_order']} and {L['A3']['valid_copies_of_input_order']}; (3) cost: about "
+        f"{L['A3']['seconds_mean']} s and {n0(L['A3']['input_tokens_mean'])} prompt tokens per customer against milliseconds for the rule; "
+        f"(4) evidence: {lb['nonempty_truth_users']} labelled customers, and on all warm customers the encoder fill alone does not beat latest buy."
+        f"{lab_disc} <i>Threats to validity:</i> one prompt, one model size, one cutoff, a fixed candidate order (position bias untested), "
+        f"bfloat16 on MPS (another device may change some greedy answers), and a protocol in which repeats count as hits.")
+    return out
+
+
+USED = ["fartrans", "dataset", "llmrank", "cao26", "li23", "flarko", "qwen3emb", "qwen3"]
 
 if __name__ == "__main__":
     main()
