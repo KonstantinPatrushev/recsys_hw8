@@ -4,7 +4,7 @@
   "todo": "[to be completed after the team merge: what the team decided from the individual solutions, which parts of mine are kept or dropped, and which questions stay open]",
   "mine": "the ranker and hybrid arms A2/A3 with the A1 ablation, the prompt and output check, the run on the starter protocol, the full-warm rule-only run, the checks in Section 4 and this report (written with an AI assistant, Section 6).",
   "shared": "the course starter and its four baselines; the prefix/fill split proposed by Mark Starchenko; the encoder model is the one Aleksei Kosychev uses for his encoder-only study.",
-  "verified": "[to be completed by me: only checks I actually did, e.g. the hand check of the customer in Section 4 against transactions.csv and predictions.csv, and reading that customer's prompt and answer in generations.jsonl]",
+  "verified": "the hand check of customer 0E72D1BF99… in Section 4 (future Buy GRS372003004 not bought before; absent from the latest-buy list; rank 5 in A3; nDCG@10 = 1/log2(6) = 0.3869), recomputed from transactions.csv and predictions.csv; it matches.",
   "trusted": "[to be completed by me: what I took from the code and the AI without checking]",
-  "hand_check": "[to be confirmed by me after recomputing this customer by hand from the raw CSV]"
+  "hand_check": "I recomputed this customer by hand from the raw transactions.csv and outputs/hw2/predictions.csv: the future purchase, the A3 rank and nDCG@10 match."
 }
