@@ -77,8 +77,8 @@ def main():
     c = lambda k: f"[{num[k]}]"
     lab = j("hw2_labelled_sample_60.json") if (EV / "hw2_labelled_sample_60.json").exists() else None
     lab_an = j("hw2_labelled_analysis.json") if (EV / "hw2_labelled_analysis.json").exists() else None
-    hc = team.get("hand_check", "")
-    hand = f'<span class="todo">{esc(hc)}</span>' if hc.startswith("[") else esc(hc)
+    mark = lambda t: f'<span class="todo">{esc(t)}</span>' if t.startswith("[") else esc(t)  # placeholders stay yellow
+    hand = mark(team.get("hand_check", ""))
     T = prose(h, an, warm, lab, lab_an, hand)
     lab_block = ""
     if lab:
@@ -221,14 +221,14 @@ answers are generated with decoding constrained to candidate ISINs not yet emitt
 prompt facts, candidate pools, the seeded labelled sample and the 100 demo customers, cutoff, nDCG@10, fallback. Read-out: paired per-customer
 differences against latest buy and A1, repeat and new hits. This isolates whether the LLM adds anything on the new-asset side once it cannot
 lose repeats; the team&rsquo;s logistic-regression ranker of past assets is the classical control for the repeat side.</p>
-<p><b>Team discussion and individual contribution.</b> {esc(team['documented'])} <span class="todo">{esc(team['todo'])}</span></p>
+<p><b>Team discussion and individual contribution.</b> {esc(team['documented'])} {mark(team['todo'])}</p>
 <ul><li><b>My work:</b> {esc(team['mine'])}</li><li><b>Shared:</b> {esc(team['shared'])}</li></ul>
 
 <h2>6. AI Usage Disclosure</h2>
 <p><b>Tools.</b> Claude Code 2.1.292 (VS Code extension) with Claude Opus 5.5, one session. <b>Use.</b> Code for the experiment and the report
 builder, running the models and the starter, analysis, and a draft of this report; every number is rendered from <code>evidence/</code>.
-<b>What I personally verified.</b> <span class="todo">{esc(team['verified'])}</span> <b>Trusted without verification.</b>
-<span class="todo">{esc(team['trusted'])}</span> <b>Session log.</b> <code>patrushev_konstantin_session2_session.json</code>, a derived export of the
+<b>What I personally verified.</b> {mark(team['verified'])} <b>Trusted without verification.</b>
+{mark(team['trusted'])} <b>Session log.</b> <code>patrushev_konstantin_session2_session.json</code>, a derived export of the
 unmodified session lines of this homework (xz + base64 inside JSON, because the LMS rejects the raw log; SHA-256 and a restore command inside).</p>
 
 <h2>References</h2><div class="refs">{refs}</div>
