@@ -96,7 +96,7 @@ do not; every customer has purchases, so only the nonempty mean is meaningful, a
 <div class="avoid"><table><tr><th>Method</th><th class=n>Users</th><th class=n>Users with future purchases</th><th class=n>nDCG@10: nonempty truth</th>
 <th class=n>Better / worse than latest buy</th><th class=n>Failed cases</th></tr>{t3}</table>
 <p class="cap">Table 3. Seeded labelled sample (<code>hw2_labelled_sample_{lab['users']}.json</code>, <code>hw2_labelled_analysis.json</code>); LLM generation
-{n0(lrt['llm_generation_s'].get('A2', 0))} s (A2) and {n0(lrt['llm_generation_s'].get('A3', 0))} s (A3); whole run {n0(lrt['total_wall_clock_s'])} s.</p></div>"""
+{n0(lrt['llm_generation_s'].get('A2', 0))} s (A2) and {n0(lrt['llm_generation_s'].get('A3', 0))} s (A3); whole run {n0(lrt['total_wall_clock_s'])} s. Failed cases fall back to the rule list and are included.</p></div>"""
     L = an["llm"]
     def inv(a):
         b = L[a]["calls_invalid_by_past_assets"]
@@ -199,25 +199,26 @@ the rule list and are included in the scores.</p></div>
 {f4(W['A1_rule_encoder_fill']['ndcg_at_10_nonempty'])} on customers with purchases against {f4(W['latest_buy']['ndcg_at_10_nonempty'])} for latest buy
 (<code>hw2_rule_only_10404users.json</code>): the small demo gain of A1 does not hold at scale. The LLM arms were not run on the full cohort
 (about {rnd(per_call['A3'] * W['latest_buy']['users'] / 3600, 1)} h per arm at the measured speed).</p>
-{lab_block}
-<p><b>What changed per customer.</b> {T['changes_text']}</p>
+<p><b>What changed per customer (demo).</b> {T['changes_text']}</p>
 <div class="avoid"><table>
 <tr><th>Arm</th><th class=n>Valid lists</th><th class=n>Invalid: 1 / 2&ndash;3 / 4+ past assets</th><th class=n>Valid lists keeping all past assets*</th>
 <th class=n>Mean new assets in valid lists</th><th class=n>Seconds per call: mean / max</th></tr>
 {llm_rows}</table>
 <p class="cap">Table 2. Ranker behaviour (<code>hw2_analysis.json</code>). Invalid cells: invalid calls / calls for customers with that many eligible past
 assets. *All of group A when it has at most ten assets, otherwise ten of them.</p></div>
+{lab_block}
 <p><b>Checks.</b> (a) For all 100 customers A0 equals the starter&rsquo;s latest-buy list and the four baselines&rsquo; nDCG@10 equal the starter&rsquo;s
 <code>metrics.json</code> exactly (assertions in the script). (b) Every date in every prompt precedes the cutoff (assertion); labels are computed
-only after all lists are fixed. (c) {T['hand_check_text']}</p>
+only after all lists are fixed; both hold for both runs. (c) {T['hand_check_text']}</p>
 
 <h2>5. Discussion</h2>
 <p><b>What improved and what failed.</b> {T['discussion_text']}</p>
-<p><b>Next controlled experiment.</b> <i>Changes:</i> only the ranker&rsquo;s decoding: generation constrained so that each next ISIN is a
-candidate not yet emitted, which makes every answer valid. <i>Fixed:</i> model and revision, prompt, candidate pools, users (the 100 demo customers
-and the seeded labelled sample), cutoff, nDCG@10, fallback rule. Read-out: paired per-customer differences against latest buy and the share of
-answers that copy the rule. If the ranker still mostly copies the rule, the following step is the team&rsquo;s logistic-regression ranker of past
-assets as the same-information classical control, then a validation cutoff (1 January 2021) before any choice is tested again.</p>
+<p><b>Next controlled experiment.</b> <i>Changes:</i> one rule in the ranker&rsquo;s output: the past assets must stay in the Top-10 (in
+the order the LLM gives), and the LLM only chooses which never-bought candidates fill the free slots and where they go relative to each other;
+answers are generated with decoding constrained to candidate ISINs not yet emitted, so every answer is valid. <i>Fixed:</i> model and revision,
+prompt facts, candidate pools, the seeded labelled sample and the 100 demo customers, cutoff, nDCG@10, fallback. Read-out: paired per-customer
+differences against latest buy and A1, repeat and new hits. This isolates whether the LLM adds anything on the new-asset side once it cannot
+lose repeats; the team&rsquo;s logistic-regression ranker of past assets is the classical control for the repeat side.</p>
 <p><b>Team discussion and individual contribution.</b> {esc(team['documented'])} <span class="todo">{esc(team['todo'])}</span></p>
 <ul><li><b>My work:</b> {esc(team['mine'])}</li><li><b>Shared:</b> {esc(team['shared'])}</li></ul>
 
@@ -258,11 +259,14 @@ def prose(h, an, warm, lab=None, lab_an=None):
         LM, LA = lab["metrics"], lab_an["arms"]
         lab_sent = (f" On a seeded sample of {lab['users']} warm customers who have purchases, A3 scores {f4(LM[k3]['ndcg_at_10_nonempty'])} "
                     f"and A2 {f4(LM[k2]['ndcg_at_10_nonempty'])} against {f4(LM['latest_buy']['ndcg_at_10_nonempty'])} for latest buy.")
+    LA = lab_an["arms"] if lab else None
     out["abstract_takeaway"] = (
         f"On these 100 customers both ranker arms score above all four baselines, but only {lb['nonempty_truth_users']} customers have purchases "
-        f"(A3: {wl(A, k3)} than latest buy), the largest single gain comes from an encoder candidate the ranker left in place, and "
-        f"{fail['A2']}% (A2) and {fail['A3']}% (A3) of the ranker&rsquo;s answers are invalid.{lab_sent} "
-        f"The pipeline runs end to end; the evidence that the LLM ranker helps is not there yet.")
+        f"(A3: {wl(A, k3)} than latest buy) and {fail['A2']}% (A2) and {fail['A3']}% (A3) of the ranker&rsquo;s answers are invalid. "
+        + (f"On a seeded sample of {lab['users']} warm customers with purchases the order reverses: A3 scores {f4(lab['metrics'][k3]['ndcg_at_10_nonempty'])} "
+           f"and A2 {f4(lab['metrics'][k2]['ndcg_at_10_nonempty'])} against {f4(lab['metrics']['latest_buy']['ndcg_at_10_nonempty'])} for latest buy "
+           f"(A3: {wl(LA, k3)}), mainly because the ranker drops past assets that customers buy again. In this setting the zero-shot ranker "
+           f"does not beat the recency rule." if lab else "The pipeline runs end to end; the evidence that the LLM ranker helps is not there yet."))
     out["changes_text"] = (
         f"Against latest buy, on the {lb['nonempty_truth_users']} customers with purchases: A1 {wl(A, k1)}; A2 {wl(A, k2)}; A3 {wl(A, k3)}; "
         f"the rest are unchanged. Correct assets in the Top-10 of all 100 customers (repeat + new; there are {an['truth_repeat_items']} + "
@@ -275,7 +279,7 @@ def prose(h, an, warm, lab=None, lab_an=None):
     ub = ", ".join(map(str, ex["latest_buy_hit_ranks"])) or "none"
     u3 = ", ".join(map(str, ex["A3_hit_ranks"])) or "none"
     out["hand_check_text"] = (
-        f"An independent recomputation of nDCG@10 for all seven methods from <code>predictions.csv</code> and the raw "
+        f"An independent recomputation of nDCG@10 for all seven methods in both runs from <code>predictions.csv</code> and the raw "
         f"<code>transactions.csv</code>, without the starter&rsquo;s code, matches <code>per_user.csv</code> "
         f"(largest difference {max(an['independent_recompute_max_abs_diff'].values()):.1f}). "
         f"(d) Hand check, customer <code>{ex['user_id'][:10]}&hellip;</code> (largest A3 vs latest-buy difference): one future purchase, "
@@ -284,19 +288,23 @@ def prose(h, an, warm, lab=None, lab_an=None):
         f"<span class=\"todo\">[to be confirmed by me after recomputing this customer by hand from the raw CSV]</span>")
     lab_disc = ""
     if lab:
-        lab_disc = (f" The seeded sample of {lab['users']} labelled warm customers gives A3 {wl(lab_an['arms'], k3)} and A2 {wl(lab_an['arms'], k2)} "
-                    f"than latest buy, with {lab['failed_cases'].get('A3', 0)} and {lab['failed_cases'].get('A2', 0)} invalid answers.")
+        LM = lab["metrics"]
+        lab_disc = (f"<i>Main result:</i> the demo gain does not hold. On the seeded labelled sample latest buy finds {LA['latest_buy']['hits_repeat']} repeat "
+                    f"and {LA['latest_buy']['hits_new']} new purchases in its Top-10s, A3 {LA[k3]['hits_repeat']} and {LA[k3]['hits_new']}, A2 "
+                    f"{LA[k2]['hits_repeat']} and {LA[k2]['hits_new']}: the ranker gains a few new assets and loses more repeats, which customers buy far "
+                    f"more often. A3 loses more than A2 because it puts more never-bought candidates into its lists ({lab_an['llm']['A3']['mean_group_B_picks']} "
+                    f"against {lab_an['llm']['A2']['mean_group_B_picks']} per valid answer on this sample) and so pushes out more past assets. "
+                    f"The encoder fill alone (A1) is a wash: {wl(LA, k1)} here, slightly below latest buy on all warm customers. ")
     out["discussion_text"] = (
-        f"<i>Improved:</i> on the starter protocol both ranker arms beat all four provided baselines, including popularity "
-        f"({f4(M['popularity']['ndcg_at_10'])}), with every invalid answer kept in the score through the fallback. "
-        f"<i>Failed or unclear:</i> (1) validity: Qwen3-1.7B repeats or invents ISINs in a fifth to a quarter of the answers even with greedy "
-        f"decoding; (2) the ranker mostly keeps the rule: it keeps the order of the past assets in {L['A2']['valid_with_group_A_order_kept']} of "
-        f"{L['A2']['valid']} (A2) and {L['A3']['valid_with_group_A_order_kept']} of {L['A3']['valid']} (A3) valid answers and copies the whole input "
-        f"order in {L['A2']['valid_copies_of_input_order']} and {L['A3']['valid_copies_of_input_order']}; (3) cost: about "
-        f"{L['A3']['seconds_mean']} s and {n0(L['A3']['input_tokens_mean'])} prompt tokens per customer against milliseconds for the rule; "
-        f"(4) evidence: {lb['nonempty_truth_users']} labelled customers, and on all warm customers the encoder fill alone does not beat latest buy."
-        f"{lab_disc} <i>Threats to validity:</i> one prompt, one model size, one cutoff, a fixed candidate order (position bias untested), "
-        f"bfloat16 on MPS (another device may change some greedy answers), and a protocol in which repeats count as hits.")
+        lab_disc +
+        f"<i>Other failures:</i> (1) validity: Qwen3-1.7B repeats or invents ISINs in {fail['A3']}&ndash;{fail['A2']}% of the demo answers even with "
+        f"greedy decoding; (2) where it does not drop assets the ranker mostly keeps the rule: it keeps the order of the past assets in "
+        f"{L['A2']['valid_with_group_A_order_kept']} of {L['A2']['valid']} (A2) and {L['A3']['valid_with_group_A_order_kept']} of {L['A3']['valid']} (A3) "
+        f"valid demo answers; (3) cost: about {L['A3']['seconds_mean']} s and {n0(L['A3']['input_tokens_mean'])} prompt tokens per customer against "
+        f"milliseconds for the rule. <i>What worked:</i> the pipeline runs end to end with pinned open weights, every failure is counted, and two "
+        f"independent checks reproduce every score. <i>Threats to validity:</i> one prompt, one model size, one cutoff, a fixed candidate order "
+        f"(position bias untested), bfloat16 on MPS (another device may change some greedy answers), {lab['users'] if lab else ''} labelled customers in the larger sample, "
+        f"and a protocol in which repeats count as hits.")
     return out
 
 
