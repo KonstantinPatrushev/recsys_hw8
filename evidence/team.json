@@ -1,9 +1,0 @@
-{
-  "name": "Name",
-  "discussion": "[to be completed by the student: what the team actually discussed and decided]",
-  "options": "[to be completed: questions, methods, baselines and data slices weighed, including dropped ones]",
-  "agreement": "[to be completed: what converged and what still differs]",
-  "contribution": "[draft, edit to what is true] I ran the four starter baselines on the demo and the full warm cohort, ran the no-LLM pilot that locates the headroom, checked which profile and price fields leak future information, and proposed the repeat-aware hybrid question.",
-  "verified": "[to be completed by the student: only checks actually done, e.g. re-running the starter and comparing Table 2, reading the record in transactions.csv, opening the cited papers]",
-  "trusted": "[to be completed by the student]"
-}
